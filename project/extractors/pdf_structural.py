@@ -72,6 +72,10 @@ _BOMBAY_SUPPLEMENT_INLINE_TYPES = {
     "XOBST",
     "XOB(ST)",
 }
+_BOMBAY_SUPPLEMENT_TEXT_PAT = re.compile(
+    r"\b(IA(?:ST|\(ST\))?|CAF|B/?WP|XOB(?:/ST|\(ST\)|ST))\s*/?\s*(\d{1,7})\s*/\s*((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
 
 
 def _normalize_case_type(raw_type: str) -> str:
@@ -81,6 +85,11 @@ def _normalize_case_type(raw_type: str) -> str:
     text = text.replace("-", "")
     text = re.sub(r"/{2,}", "/", text)
     text = text.strip("/")
+    # Canonicalize common Bombay companion family aliases.
+    if text == "BWP":
+        text = "B/WP"
+    elif text in {"XOB(ST)", "XOBST"}:
+        text = "XOB/ST"
     return text
 
 
@@ -147,24 +156,24 @@ def _supplement_bombay_cases_from_lines(
         text = (line or "").strip()
         if not text:
             continue
-        if _BOMBAY_NOISE_PAT.search(text):
-            continue
+        noisy_line = bool(_BOMBAY_NOISE_PAT.search(text))
 
-        serial_hit, case_hit = _extract_bombay_case_from_line(text, allow_inline=False)
-        if not case_hit and len(text) <= 48:
-            serial_hit, case_hit = _extract_bombay_case_from_line(text, allow_inline=True)
+        serial_hit, case_hit = None, None
+        if not noisy_line:
+            serial_hit, case_hit = _extract_bombay_case_from_line(text, allow_inline=False)
+            if not case_hit and len(text) <= 48:
+                serial_hit, case_hit = _extract_bombay_case_from_line(text, allow_inline=True)
 
         candidates: List[str] = []
         if case_hit:
             candidates.append(case_hit)
 
-        # Capture additional inline companion cases from longer lines for
+        # Capture additional inline companion cases for
         # known Bombay companion families (IA/CAF/XOB/B-WP forms).
-        if len(text) > 48:
-            for c in _extract_all_bombay_inline_cases(text):
-                c_type = c.split("/")[0]
-                if c_type in _BOMBAY_SUPPLEMENT_INLINE_TYPES:
-                    candidates.append(c)
+        for c in _extract_all_bombay_inline_cases(text):
+            c_type = c.split("/")[0]
+            if c_type in _BOMBAY_SUPPLEMENT_INLINE_TYPES:
+                candidates.append(c)
 
         for case_no in candidates:
             if case_no in seen:
@@ -188,6 +197,42 @@ def _supplement_bombay_cases_from_lines(
                 }
             )
 
+    return extras
+
+
+def _supplement_bombay_cases_from_page_text(
+    page_obj: fitz.Page,
+    page_num: int,
+    existing_case_nos: set[str],
+) -> List[Dict[str, Any]]:
+    extras: List[Dict[str, Any]] = []
+    seen = set(existing_case_nos)
+    text = page_obj.get_text("text") or ""
+    for m in _BOMBAY_SUPPLEMENT_TEXT_PAT.finditer(text):
+        case_type = _normalize_case_type(m.group(1))
+        if case_type not in _BOMBAY_SUPPLEMENT_INLINE_TYPES:
+            continue
+        case_no = f"{case_type}/{m.group(2)}/{m.group(3)}"
+        if case_no in seen:
+            continue
+        seen.add(case_no)
+        extras.append(
+            {
+                "page": page_num,
+                "row_id": f"{page_num}-t{len(extras)+1}",
+                "case_no": case_no,
+                "serial": "",
+                "petitioner": "",
+                "respondent": "",
+                "advocates": "",
+                "raw_text": case_no,
+                "party": "",
+                "stage": "",
+                "geometry": {"x1": 0, "y1": 0, "x2": 0, "y2": 0},
+                "confidence": 0.65,
+                "_pre_parsed": True,
+            }
+        )
     return extras
 
 
@@ -360,6 +405,8 @@ def _extract_bombay_page(page_obj: fitz.Page, page_num: int) -> List[Dict[str, A
     _flush()
     existing = {str(c.get("case_no") or "") for c in cases if c.get("case_no")}
     cases.extend(_supplement_bombay_cases_from_lines(all_lines, page_num, existing))
+    existing = {str(c.get("case_no") or "") for c in cases if c.get("case_no")}
+    cases.extend(_supplement_bombay_cases_from_page_text(page_obj, page_num, existing))
     return cases
 
 
@@ -407,7 +454,7 @@ _M_SKIP_PAT = re.compile(
 # Accept only clean case-column tails after the matched case number.
 # This prevents false positives when party text bleeds into the case column.
 _M_CASE_TAIL_OK = re.compile(
-    r"^(?:$|[\-:.,;()\[\] ]+$|\(FILING\s*NO\.?\)?|AND\b|WITH\b)",
+    r"^(?:$|[\-:.,;()\[\] ]+$|\(FILING\b[^)]*\)?|FILING\b|AND\b|WITH\b)",
     re.IGNORECASE,
 )
 
@@ -420,6 +467,11 @@ def _match_madras_case_text(case_txt: str, serial_on_line: bool = False):
     if not tail:
         return m
     if _M_CASE_TAIL_OK.match(tail):
+        return m
+    # Madras lines frequently end as a truncated "(Filing" token in the case column.
+    # Accept these tails even without an on-line serial to avoid dropping valid cases.
+    tail_upper = tail.upper()
+    if tail_upper.startswith("(FILING") or tail_upper.startswith("FILING"):
         return m
     if serial_on_line:
         return m

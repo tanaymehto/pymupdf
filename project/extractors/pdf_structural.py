@@ -457,6 +457,10 @@ _M_CASE_TAIL_OK = re.compile(
     r"^(?:$|[\-:.,;()\[\] ]+$|\(FILING\b[^)]*\)?|FILING\b|AND\b|WITH\b)",
     re.IGNORECASE,
 )
+_M_NAME_LIKE_TAIL = re.compile(
+    r"^[A-Z][A-Z.&'/-]*(?:\s+[A-Z][A-Z.&'/-]*){0,4}$",
+    re.IGNORECASE,
+)
 
 
 def _match_madras_case_text(case_txt: str, serial_on_line: bool = False):
@@ -472,6 +476,10 @@ def _match_madras_case_text(case_txt: str, serial_on_line: bool = False):
     # Accept these tails even without an on-line serial to avoid dropping valid cases.
     tail_upper = tail.upper()
     if tail_upper.startswith("(FILING") or tail_upper.startswith("FILING"):
+        return m
+    # Case-column text can spill party names into the same token/line.
+    # If the tail is name-like and has no digits, still treat this as a valid case line.
+    if not re.search(r"\d", tail) and _M_NAME_LIKE_TAIL.match(tail):
         return m
     if serial_on_line:
         return m

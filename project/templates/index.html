@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cause List Extraction</title>
+  <style>
+    :root {
+      --bg:         #0d1117;
+      --surface:    #161b22;
+      --card:       #1c2128;
+      --border:     #30363d;
+      --text:       #e6edf3;
+      --muted:      #8b949e;
+      --label:      #79c0ff;
+      --accent:     #58a6ff;
+      --accent-dim: #1f3358;
+      --green:      #3fb950;
+      --btn-bg:     #238636;
+      --btn-hover:  #2ea043;
+      --btn2-bg:    #21262d;
+      --btn2-hover: #30363d;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 28px 32px;
+      min-height: 100vh;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 20px 0;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    input[type="file"] {
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    input[type="file"]::file-selector-button {
+      background: var(--btn2-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+
+    select, input[type="number"] {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    select:focus, input[type="number"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+    }
+    input[type="number"] { width: 175px; }
+
+    button {
+      padding: 6px 16px;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #runBtn {
+      background: var(--btn-bg);
+      border-color: rgba(240,246,252,0.1);
+      color: #fff;
+    }
+    #runBtn:hover { background: var(--btn-hover); }
+    #downloadBtn {
+      background: var(--btn2-bg);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    #downloadBtn:hover { background: var(--btn2-hover); }
+
+    .meta {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 28px;
+      font-size: 13px;
+    }
+    .meta-item { display: flex; gap: 6px; align-items: center; }
+    .meta-key { color: var(--muted); }
+    .meta-val { color: var(--text); font-weight: 600; }
+    #status { width: 100%; color: var(--muted); font-style: italic; }
+
+    .case-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .case-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      transition: border-color 0.15s;
+    }
+    .case-card:hover { border-color: var(--accent); }
+
+    .case-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .case-no {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--accent);
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-dim);
+      color: var(--label);
+      white-space: nowrap;
+    }
+    .case-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .kv { font-size: 13px; margin: 4px 0; line-height: 1.5; }
+    .lbl { color: var(--label); font-weight: 600; margin-right: 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+
+    pre {
+      background: var(--surface);
+      color: #a8d1f7;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      overflow: auto;
+      max-height: 60vh;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    /* ---- Progress log panel ---- */
+    #logPanel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 18px;
+      overflow: hidden;
+    }
+    #logPanel summary {
+      cursor: pointer;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    #logPanel summary::-webkit-details-marker { display: none; }
+    #logPanel[open] summary { border-bottom: 1px solid var(--border); }
+    #logPanel summary .log-arrow { transition: transform 0.15s; }
+    #logPanel[open] summary .log-arrow { transform: rotate(90deg); }
+    #logPanel summary .log-badge {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--accent-dim);
+      color: var(--label);
+    }
+    #logPre {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 0;
+      padding: 10px 14px;
+      max-height: 260px;
+      font-size: 11.5px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .log-line-dl  { color: #3fb950; } /* download/model lines (green) */
+    .log-line-pg  { color: #79c0ff; } /* page progress lines (blue)  */
+    .log-line-err { color: #f85149; } /* error lines (red)           */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <h2>High Court Cause List Extraction</h2>
+
+  <div class="toolbar">
+    <input id="pdfFile" type="file" accept="application/pdf" />
+    <select id="courtSelect">
+      <option value="madras">Madras High Court</option>
+      <option value="bombay">Bombay High Court</option>
+      <option value="delhi">Delhi High Court</option>
+    </select>
+    <select id="methodSelect">
+      <option selected>PyMuPDF Structural Parsing</option>
+    </select>
+    <input id="maxPages" type="number" min="1" placeholder="max pages (optional)" />
+    <button id="runBtn">Run Extraction</button>
+    <button id="downloadBtn" type="button">Download JSON</button>
+  </div>
+
+  <div class="meta">
+    <div id="status">Upload a PDF and click Run Extraction.</div>
+    <div class="meta-item"><span class="meta-key">Time</span><span id="timeVal" class="meta-val">—</span><span class="meta-key">s</span></div>
+    <div class="meta-item"><span class="meta-key">Rows</span><span id="rowVal" class="meta-val">—</span></div>
+    <div class="meta-item"><span class="meta-key">Case Numbers</span><span id="caseVal" class="meta-val">—</span></div>
+    <div class="meta-item"><span class="meta-key">Structured Cases</span><span id="structuredCaseVal" class="meta-val">—</span></div>
+  </div>
+
+  <!-- Live progress log (collapsed by default) -->
+  <details id="logPanel">
+    <summary>
+      <span class="log-arrow">▶</span>
+      <span id="logTitle">Live Progress Log</span>
+      <span id="logBadge" class="log-badge" style="display:none">0 lines</span>
+    </summary>
+    <pre id="logPre"></pre>
+  </details>
+
+  <div id="caseGrid" class="case-grid"></div>
+
+  <pre id="jsonOutput">{}</pre>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

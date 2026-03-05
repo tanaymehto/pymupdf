@@ -1,0 +1,23 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+test_run/
+text_pipelines/ocr_env/
+
+# Tooling/editor
+.vscode/
+
+# Local logs and temporary outputs
+*.log
+server.log
+server_err.log
+
+# Benchmark and generated outputs
+benchmark_outputs/
+
+# Archive and package artifacts
+*.zip

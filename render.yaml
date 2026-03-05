@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: causelist-pymupdf
+    env: python
+    rootDir: project
+    plan: starter
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k gthread -t 180 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
